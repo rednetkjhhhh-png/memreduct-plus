@@ -1,0 +1,42 @@
+name: Build Mem Reduct Plus
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/pc-optimizer-v1
+
+jobs:
+  build-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out Mem Reduct Plus
+        uses: actions/checkout@v4
+        with:
+          path: memreduct-plus
+
+      - name: Check out routine dependency
+        uses: actions/checkout@v4
+        with:
+          repository: henrypp/routine
+          path: routine
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release x64
+        run: >-
+          msbuild memreduct-plus\memreduct.sln
+          /m
+          /p:Configuration=Release
+          /p:Platform=x64
+          /verbosity:minimal
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: memreduct-plus-x64
+          path: memreduct-plus/bin/**/memreduct.exe
+          if-no-files-found: error
+
