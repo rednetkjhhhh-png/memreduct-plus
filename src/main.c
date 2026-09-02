@@ -122,7 +122,7 @@ VOID _app_generate_array (
 	while (_r_obj_enumhashtable (hashtable, NULL, &hash_code, &enum_key))
 	{
 		if (hash_code <= max_value)
-			integers[index] = hash_code;
+			integers[index] = (ULONG)hash_code;
 
 		if (++index >= count)
 			break;
