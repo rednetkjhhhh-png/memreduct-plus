@@ -9,10 +9,43 @@
 #include "resource.h"
 #include "startup_manager.h"
 
+// Compatibility aliases for the latest publicly released routine SDK.
+#define _r_button_ischecked _r_ctrl_isbuttonchecked
+#define _r_button_setcheck _r_ctrl_checkbutton
+#define _r_button_setmargins _r_ctrl_setbuttonmargins
+#define _r_button_setshield _r_ctrl_setbuttonshield
+#define _r_wnd_sendcommand _r_ctrl_sendcommand
+#define _r_config_getboolean _r_config_getboolean_ex
+#define _r_config_getlong _r_config_getlong_ex
+#define _r_config_getlong64 _r_config_getlong64_ex
+#define _r_config_getulong _r_config_getulong_ex
+#define _r_config_getfont _r_config_getfont_ex
+#define _r_config_setboolean _r_config_setboolean_ex
+#define _r_config_setlong _r_config_setlong_ex
+#define _r_config_setlong64 _r_config_setlong64_ex
+#define _r_config_setulong _r_config_setulong_ex
+#define _r_config_setfont _r_config_setfont_ex
+
 STATIC_DATA config = {0};
 
 ULONG limits_arr[13] = {0};
 ULONG intervals_arr[13] = {0};
+
+BOOLEAN _app_configinvertboolean (
+	_In_ LPCWSTR key_name,
+	_In_ BOOLEAN def_value,
+	_In_opt_ LPCWSTR section_name
+)
+{
+	BOOLEAN value;
+
+	value = !_r_config_getboolean (key_name, def_value, section_name);
+	_r_config_setboolean (key_name, value, section_name);
+
+	return value;
+}
+
+#define _r_config_invertboolean _app_configinvertboolean
 
 INT WINAPIV compare_numbers (
 	_In_opt_ PVOID context,
@@ -219,10 +252,42 @@ NTSTATUS _app_flushvolumecache ()
 	if (!NT_SUCCESS (status))
 		return status;
 
-	status = _r_fs_getvolumemountpoints (&object_mountpoints, hdevice);
+	{
+		MOUNTMGR_MOUNT_POINT input = {0};
+		ULONG buffer_size = 0x1000;
+
+		object_mountpoints = NULL;
+
+		for (;;)
+		{
+			object_mountpoints = _r_mem_allocate (buffer_size);
+
+			status = _r_fs_deviceiocontrol (
+				hdevice,
+				IOCTL_MOUNTMGR_QUERY_POINTS,
+				&input,
+				sizeof (input),
+				object_mountpoints,
+				buffer_size,
+				NULL
+			);
+
+			if (status != STATUS_BUFFER_OVERFLOW && status != STATUS_BUFFER_TOO_SMALL)
+				break;
+
+			buffer_size = object_mountpoints->Size > buffer_size ? object_mountpoints->Size : buffer_size * 2;
+			_r_mem_free (object_mountpoints);
+			object_mountpoints = NULL;
+		}
+	}
 
 	if (!NT_SUCCESS (status))
+	{
+		if (object_mountpoints)
+			_r_mem_free (object_mountpoints);
+
 		goto CleanupExit;
+	}
 
 	for (ULONG i = 0; i < object_mountpoints->NumberOfMountPoints; i++)
 	{
@@ -1761,7 +1826,7 @@ INT_PTR CALLBACK DlgProc (
 
 			_app_initialize (hwnd);
 
-			_r_sys_settimer (hwnd, UID, TIMER, &_app_timercallback);
+			SetTimer (hwnd, UID, TIMER, &_app_timercallback);
 
 			break;
 		}

@@ -484,8 +484,8 @@ static VOID _startup_enumerate (
 	_startup_enum_registry (context, HKEY_CURRENT_USER, StartupSourceCurrentUserRun32, KEY_WOW64_32KEY, L"Current user (32-bit)");
 	_startup_enum_registry (context, HKEY_LOCAL_MACHINE, StartupSourceLocalMachineRun, KEY_WOW64_64KEY, L"All users (64-bit)");
 	_startup_enum_registry (context, HKEY_LOCAL_MACHINE, StartupSourceLocalMachineRun32, KEY_WOW64_32KEY, L"All users (32-bit)");
-	_startup_enum_folder (context, FOLDERID_Startup, StartupSourceCurrentUserFolder, L"Current user folder");
-	_startup_enum_folder (context, FOLDERID_CommonStartup, StartupSourceCommonFolder, L"All users folder");
+	_startup_enum_folder (context, &FOLDERID_Startup, StartupSourceCurrentUserFolder, L"Current user folder");
+	_startup_enum_folder (context, &FOLDERID_CommonStartup, StartupSourceCommonFolder, L"All users folder");
 }
 
 static ULONGLONG _startup_hash_item (

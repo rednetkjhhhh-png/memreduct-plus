@@ -21,6 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: henrypp/routine
+          ref: ff8f811b6520bc0b60754244660f39f6f3007497
           path: routine
 
       - name: Add MSBuild to PATH
