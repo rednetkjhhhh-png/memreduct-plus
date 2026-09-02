@@ -2,14 +2,12 @@
 // Startup application manager added in 2026.
 // This file is distributed under the GNU GPL v3 with the parent project.
 
-#include <windows.h>
-#include <commctrl.h>
-#include <shlobj.h>
+#include "routine.h"
+
 #include <winver.h>
 #include <wchar.h>
 #include <wctype.h>
 
-#include "routine.h"
 #include "app.h"
 #include "rapp.h"
 
