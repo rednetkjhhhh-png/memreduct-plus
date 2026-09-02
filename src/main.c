@@ -2,6 +2,7 @@
 // Copyright (c) 2011-2026 Henry++
 
 #include "routine.h"
+#include <mountmgr.h>
 
 #include "main.h"
 #include "rapp.h"
@@ -76,7 +77,8 @@ VOID _app_generate_array (
 {
 	PR_HASHTABLE hashtable;
 	ULONG_PTR enum_key = 0;
-	ULONG hash_code, index = 0;
+	ULONG index = 0;
+	ULONG_PTR hash_code;
 
 	RtlSecureZeroMemory (integers, sizeof (ULONG) * count);
 
@@ -556,8 +558,7 @@ VOID _app_memoryclean (
 	{
 		if (_r_config_getboolean (L"BalloonCleanResults", TRUE, NULL))
 		{
-			if (!_r_tray_popup (hwnd, &GUID_TrayIcon, flags, _r_app_getname (), buffer3))
-				_r_show_message (hwnd, MB_OK | MB_ICONINFORMATION, NULL, buffer3);
+				_r_tray_popup (hwnd, &GUID_TrayIcon, flags, _r_app_getname (), buffer3);
 		}
 		else
 		{
@@ -1771,7 +1772,7 @@ VOID _app_initialize (
 
 	if (_r_sys_iselevated ())
 	{
-		_r_sys_setprocessprivilege (hwnd, NtCurrentProcess (), privileges, RTL_NUMBER_OF (privileges), TRUE);
+		_r_sys_setprocessprivilege (NtCurrentProcess (), privileges, RTL_NUMBER_OF (privileges), TRUE);
 	}
 	else
 	{
@@ -2107,7 +2108,6 @@ INT_PTR CALLBACK DlgProc (
 				case WM_LBUTTONDOWN:
 				case WM_MBUTTONDOWN:
 				{
-					R_STRINGREF taskmgr_sr = PR_STRINGREF_INIT (L"taskmgr.exe");
 					LONG action;
 
 					if (LOWORD (lparam) == WM_MBUTTONDOWN)
@@ -2129,7 +2129,7 @@ INT_PTR CALLBACK DlgProc (
 
 						case 2:
 						{
-							_r_sys_createprocess (&taskmgr_sr, NULL, NULL, FALSE);
+								_r_sys_createprocess (L"taskmgr.exe", NULL, NULL, FALSE);
 							break;
 						}
 
