@@ -27,7 +27,7 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build Release x64
+      - name: Build original Mem Reduct Release x64
         run: >-
           msbuild memreduct-plus\memreduct.sln
           /m
@@ -35,9 +35,43 @@ jobs:
           /p:Platform=x64
           /verbosity:minimal
 
-      - name: Upload executable
+      - name: Build PC Optimizer dashboard x64
+        shell: powershell
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { $vswhere = "C:\ProgramData\Chocolatey\bin\vswhere.exe" }
+          $vs = & $vswhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath -latest
+          if (-not $vs) { throw 'Visual C++ toolchain not found.' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          New-Item -ItemType Directory -Force -Path memreduct-plus\bin\amd64 | Out-Null
+          $cmd = 'call "' + $vcvars + '" && cl /nologo /O2 /W3 /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /Fe:memreduct-plus\bin\amd64\MemReductPlus.exe memreduct-plus\optimizer\pc_optimizer.c /link /SUBSYSTEM:WINDOWS comctl32.lib psapi.lib powrprof.lib shell32.lib advapi32.lib user32.lib gdi32.lib'
+          cmd /c $cmd
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify executables
+        shell: powershell
+        run: |
+          $original = Get-ChildItem memreduct-plus\bin -Recurse -Filter memreduct.exe | Where-Object { $_.FullName -match '\\64\\|amd64|x64' } | Select-Object -First 1
+          $plus = Get-Item memreduct-plus\bin\amd64\MemReductPlus.exe
+          if (-not $original) { throw 'Original memreduct.exe was not produced.' }
+          if ($plus.Length -lt 20000) { throw 'MemReductPlus.exe is unexpectedly small.' }
+          Write-Host "Original: $($original.FullName) $($original.Length) bytes"
+          Write-Host "Plus: $($plus.FullName) $($plus.Length) bytes"
+          Get-FileHash $plus.FullName -Algorithm SHA256
+
+      - name: Prepare final package
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path memreduct-plus\final | Out-Null
+          $original = Get-ChildItem memreduct-plus\bin -Recurse -Filter memreduct.exe | Where-Object { $_.FullName -match '\\64\\|amd64|x64' } | Select-Object -First 1
+          Copy-Item $original.FullName memreduct-plus\final\memreduct.exe
+          Copy-Item memreduct-plus\bin\amd64\MemReductPlus.exe memreduct-plus\final\MemReductPlus.exe
+          Copy-Item memreduct-plus\MEMREDUCT_PLUS.md memreduct-plus\final\MEMREDUCT_PLUS.md
+          Copy-Item memreduct-plus\LICENSE memreduct-plus\final\LICENSE.txt
+
+      - name: Upload final x64 package
         uses: actions/upload-artifact@v4
         with:
-          name: memreduct-plus-x64
-          path: memreduct-plus/bin/**/memreduct.exe
+          name: memreduct-plus-final-x64
+          path: memreduct-plus/final/*
           if-no-files-found: error
