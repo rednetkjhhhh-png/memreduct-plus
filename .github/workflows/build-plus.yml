@@ -2,23 +2,28 @@ name: Build Mem Reduct Plus
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - feature/pc-optimizer-v1
 
 jobs:
   build-x64:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, X64, memreduct-plus]
+    timeout-minutes: 120
 
     steps:
       - name: Check out Mem Reduct Plus
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: memreduct-plus
 
+      - name: Runner identity
+        shell: powershell
+        run: |
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME"
+          Write-Host "RUNNER_OS=$env:RUNNER_OS"
+          Write-Host "RUNNER_ARCH=$env:RUNNER_ARCH"
+          if ($env:RUNNER_OS -ne "Windows") { throw "This workflow requires the Windows self-hosted MemReduct runner." }
+
       - name: Check out routine dependency
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: henrypp/routine
           ref: ff8f811b6520bc0b60754244660f39f6f3007497
@@ -27,13 +32,21 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
+      - name: Verify Visual C++ toolchain
+        shell: powershell
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { $vswhere = "C:\ProgramData\Chocolatey\bin\vswhere.exe" }
+          if (-not (Test-Path $vswhere)) { throw "vswhere.exe was not found. Install Visual Studio Build Tools with C++." }
+          $vs = & $vswhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath -latest
+          if (-not $vs) { throw "Visual C++ x64 toolchain was not found." }
+          Write-Host "Visual Studio: $vs"
+
       - name: Build original Mem Reduct Release x64
-        run: >-
-          msbuild memreduct-plus\memreduct.sln
-          /m
-          /p:Configuration=Release
-          /p:Platform=x64
-          /verbosity:minimal
+        shell: powershell
+        run: |
+          msbuild memreduct-plus\memreduct.sln /m /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build PC Optimizer dashboard x64
         shell: powershell
@@ -41,8 +54,8 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           if (-not (Test-Path $vswhere)) { $vswhere = "C:\ProgramData\Chocolatey\bin\vswhere.exe" }
           $vs = & $vswhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath -latest
-          if (-not $vs) { throw 'Visual C++ toolchain not found.' }
-          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          if (-not $vs) { throw "Visual C++ toolchain not found." }
+          $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
           New-Item -ItemType Directory -Force -Path memreduct-plus\bin\amd64 | Out-Null
           $cmd = 'call "' + $vcvars + '" && cl /nologo /O2 /W3 /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /Fe:memreduct-plus\bin\amd64\MemReductPlus.exe memreduct-plus\optimizer\pc_optimizer.c /link /SUBSYSTEM:WINDOWS comctl32.lib psapi.lib powrprof.lib shell32.lib advapi32.lib user32.lib gdi32.lib'
           cmd /c $cmd
@@ -53,8 +66,8 @@ jobs:
         run: |
           $original = Get-ChildItem memreduct-plus\bin -Recurse -Filter memreduct.exe | Where-Object { $_.FullName -match '\\64\\|amd64|x64' } | Select-Object -First 1
           $plus = Get-Item memreduct-plus\bin\amd64\MemReductPlus.exe
-          if (-not $original) { throw 'Original memreduct.exe was not produced.' }
-          if ($plus.Length -lt 20000) { throw 'MemReductPlus.exe is unexpectedly small.' }
+          if (-not $original) { throw "Original memreduct.exe was not produced." }
+          if ($plus.Length -lt 20000) { throw "MemReductPlus.exe is unexpectedly small." }
           Write-Host "Original: $($original.FullName) $($original.Length) bytes"
           Write-Host "Plus: $($plus.FullName) $($plus.Length) bytes"
           Get-FileHash $plus.FullName -Algorithm SHA256
@@ -75,3 +88,4 @@ jobs:
           name: memreduct-plus-final-x64
           path: memreduct-plus/final/*
           if-no-files-found: error
+          retention-days: 7
