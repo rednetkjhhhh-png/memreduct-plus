@@ -57,7 +57,7 @@ jobs:
                 $text = Get-Content -LiteralPath $file.FullName -Raw
                 $new = [regex]::Replace(
                   $text,
-                  '(?m)^(\s*)runs-on\s*:\s*.*$',
+                  '(?m)^(\s*)runs-on\s*:\s*(?!.*self-hosted).*$',
                   '$1runs-on: [self-hosted, Windows, X64, cost-blocked]'
                 )
                 if ($new -ne $text) {
