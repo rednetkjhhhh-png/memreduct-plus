@@ -82,10 +82,12 @@ jobs:
           Copy-Item memreduct-plus\MEMREDUCT_PLUS.md memreduct-plus\final\MEMREDUCT_PLUS.md
           Copy-Item memreduct-plus\LICENSE memreduct-plus\final\LICENSE.txt
 
-      - name: Upload final x64 package
-        uses: actions/upload-artifact@v4
-        with:
-          name: memreduct-plus-final-x64
-          path: memreduct-plus/final/*
-          if-no-files-found: error
-          retention-days: 7
+      - name: Persist final x64 package on self-hosted PC
+        shell: powershell
+        run: |
+          $dest = "D:\github-runners\deliveries\memreduct-plus\final-x64"
+          Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item "memreduct-plus\final\*" $dest -Force
+          Get-ChildItem $dest | Select-Object Name,Length,LastWriteTime
+          Write-Host "Saved locally: $dest"
