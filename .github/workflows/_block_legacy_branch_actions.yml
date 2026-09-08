@@ -32,7 +32,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $branches = @(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin) |
-            Where-Object { $_ -and $_ -ne 'HEAD' -and $_ -ne 'main' -and $_ -ne 'master' }
+            Where-Object { $_ -and $_ -ne 'HEAD' -and $_ -ne 'main' -and $_ -ne 'master' -and $_ -notlike 'ops/billing-cleanup-*' }
 
           $changedBranches = 0
           $changedFiles = 0
