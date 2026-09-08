@@ -1,0 +1,91 @@
+name: Block Legacy Branch Actions Billing
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/_block_legacy_branch_actions.yml'
+  schedule:
+    - cron: '6 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  block-legacy:
+    runs-on: [self-hosted, Windows, X64, memreduct-plus]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Replace all legacy-branch runners with a non-existent self-hosted label
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $branches = @(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin) |
+            Where-Object { $_ -and $_ -ne 'HEAD' -and $_ -ne 'main' -and $_ -ne 'master' }
+
+          $changedBranches = 0
+          $changedFiles = 0
+          $index = 0
+
+          foreach ($branch in $branches) {
+            $index++
+            $work = Join-Path $env:RUNNER_TEMP ("legacy-action-block-$index")
+            Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+            git worktree add --detach $work "origin/$branch"
+            if ($LASTEXITCODE -ne 0) { throw "worktree add failed: $branch" }
+
+            try {
+              $workflowRoot = Join-Path $work '.github\workflows'
+              if (-not (Test-Path $workflowRoot)) { continue }
+
+              $files = @(Get-ChildItem $workflowRoot -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Extension -in @('.yml','.yaml') })
+              $branchChanged = $false
+
+              foreach ($file in $files) {
+                $text = Get-Content -LiteralPath $file.FullName -Raw
+                $new = [regex]::Replace(
+                  $text,
+                  '(?m)^(\s*)runs-on\s*:\s*.*$',
+                  '$1runs-on: [self-hosted, Windows, X64, cost-blocked]'
+                )
+                if ($new -ne $text) {
+                  [System.IO.File]::WriteAllText($file.FullName, $new, (New-Object System.Text.UTF8Encoding($false)))
+                  $branchChanged = $true
+                  $changedFiles++
+                }
+              }
+
+              if ($branchChanged) {
+                Push-Location $work
+                try {
+                  git add .github/workflows
+                  git commit -m '[skip ci] Block legacy branch Actions billing'
+                  if ($LASTEXITCODE -ne 0) { throw "commit failed: $branch" }
+                  git push origin "HEAD:refs/heads/$branch"
+                  if ($LASTEXITCODE -ne 0) { throw "push failed: $branch" }
+                  $changedBranches++
+                  Write-Host "BLOCKED branch=$branch"
+                }
+                finally { Pop-Location }
+              }
+            }
+            finally {
+              git worktree remove --force $work 2>$null
+              Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          git worktree prune
+          Write-Host "LEGACY_BRANCH_BLOCK_PASS branches=$changedBranches files=$changedFiles"
