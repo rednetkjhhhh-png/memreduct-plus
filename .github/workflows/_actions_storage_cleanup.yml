@@ -1,0 +1,59 @@
+name: Actions Storage Cleanup
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/_actions_storage_cleanup.yml'
+  schedule:
+    - cron: '36 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, Windows, X64, memreduct-plus]
+    timeout-minutes: 20
+    steps:
+      - name: Delete all repository Actions artifacts and caches
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+
+          $artifactBase = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/artifacts"
+          $deletedArtifacts = 0
+          while ($true) {
+            $response = Invoke-RestMethod -Method Get -Uri "${artifactBase}?per_page=100&page=1" -Headers $headers
+            $items = @($response.artifacts)
+            if ($items.Count -eq 0) { break }
+            foreach ($artifact in $items) {
+              Invoke-RestMethod -Method Delete -Uri "$artifactBase/$($artifact.id)" -Headers $headers
+              Write-Host "Deleted artifact $($artifact.id): $($artifact.name) ($($artifact.size_in_bytes) bytes)"
+              $deletedArtifacts++
+            }
+          }
+
+          $cacheBase = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/caches"
+          $deletedCaches = 0
+          while ($true) {
+            $response = Invoke-RestMethod -Method Get -Uri "${cacheBase}?per_page=100&page=1" -Headers $headers
+            $items = @($response.actions_caches)
+            if ($items.Count -eq 0) { break }
+            foreach ($cache in $items) {
+              Invoke-RestMethod -Method Delete -Uri "$cacheBase/$($cache.id)" -Headers $headers
+              Write-Host "Deleted cache $($cache.id): $($cache.key) ($($cache.size_in_bytes) bytes)"
+              $deletedCaches++
+            }
+          }
+
+          Write-Host "ACTIONS_STORAGE_CLEANUP_PASS artifacts=$deletedArtifacts caches=$deletedCaches"
