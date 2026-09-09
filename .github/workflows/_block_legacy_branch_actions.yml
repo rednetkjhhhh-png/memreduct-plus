@@ -1,12 +1,6 @@
 name: Block Legacy Branch Actions Billing
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - '.github/workflows/_block_legacy_branch_actions.yml'
-  schedule:
-    - cron: '6 19 * * *'
   workflow_dispatch:
 
 permissions:
