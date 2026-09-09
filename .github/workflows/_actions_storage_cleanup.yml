@@ -1,12 +1,6 @@
 name: Actions Storage Cleanup
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - '.github/workflows/_actions_storage_cleanup.yml'
-  schedule:
-    - cron: '36 18 * * *'
   workflow_dispatch:
 
 permissions:
